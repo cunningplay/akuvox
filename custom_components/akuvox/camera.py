@@ -1,5 +1,7 @@
 """Camera platform for akuvox."""
 
+import sys
+
 from collections.abc import Callable, Awaitable
 
 from homeassistant.helpers import storage
@@ -94,12 +96,20 @@ class AkuvoxCameraEntity(GenericCamera):
         )
 
 
-    async def _async_get_supported_webrtc_provider(self, fn):
-        """Offer no WebRTC provider, so the frontend streams these cameras over HLS only.
+    async def stream_source(self) -> str | None:
+        """Return the RTSP URL; hand go2rtc the ffmpeg form, like HA does for generic cameras.
 
-        SmartPlus cloud relays serve RTSP over UDP only (the stream options above). HA's
-        HLS stream honors that, but go2rtc pulls RTSP over TCP, the relay answers with a
-        UDP transport, go2rtc rejects it ("wrong transport") and WebRTC fails; remote
-        clients (Companion app off the LAN) then show "Failed to start WebRTC stream".
+        SmartPlus cloud relays serve RTSP over UDP only. go2rtc's native RTSP client is TCP-only and
+        fails ("wrong transport"), but its ffmpeg source uses -rtsp_flags prefer_tcp and falls back to
+        UDP. HA's go2rtc provider adds that "ffmpeg:" prefix only for the generic platform, so do it
+        here when go2rtc is the caller (HA's own HLS stream keeps the plain URL, as a fallback).
         """
-        return None
+        src = await super().stream_source()
+        frame = sys._getframe(1)
+        for _ in range(4):
+            if frame is None:
+                break
+            if str(frame.f_globals.get("__name__", "")).startswith("homeassistant.components.go2rtc"):
+                return f"ffmpeg:{src}" if src and not src.startswith("ffmpeg:") else src
+            frame = frame.f_back
+        return src
