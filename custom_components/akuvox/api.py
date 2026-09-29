@@ -548,9 +548,10 @@ class AkuvoxApiClient:
         return None
 
     async def async_retrieve_temp_keys_data(self) -> bool:
-        """Request and parse the user's temporary keys."""
+        """Request and parse the user's temporary keys (keeps the old list when the request fails)."""
+        self._last_api_error = None
         json_data = await self.async_get_temp_key_list()
-        if json_data is not None:
+        if json_data is not None and not self._last_api_error:
             self._data.parse_temp_keys_data(json_data)
             return True
         return False
@@ -606,8 +607,15 @@ class AkuvoxApiClient:
                 self._data.token = stored
             url = f"https://{self.get_activities_host()}/{path}"
             self._last_api_error = None
-            await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data)
-            if not self._last_api_error:
+            try:
+                result = await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data,
+                                                       retry_other_app_type=False)
+            except (AkuvoxApiClientError, AkuvoxApiClientCommunicationError) as err:
+                # A timed-out POST may still have reached SmartPlus: never resend it automatically.
+                self._last_api_error = {"exception": str(err)}
+                return False
+            # Success only on an explicit {"code": 0}: HTTP errors, rate limits and unknown bodies are failures.
+            if result is not None and not self._last_api_error:
                 return True
             if attempt == 1 and self.has_token_error():
                 LOGGER.warning("🔁 SmartPlus rejected the token for %s; refreshing and retrying once", path)
@@ -669,9 +677,14 @@ class AkuvoxApiClient:
     async def async_retrieve_personal_door_log(self) -> bool:
         """Request and parse the user's door log every 2 seconds."""
         while True:
-            # Get the latest pesonal door log
-            json_data = await self.async_get_personal_door_log()
+            # Get the latest pesonal door log; a network error must not end the polling task.
+            try:
+                json_data = await self.async_get_personal_door_log()
+            except (AkuvoxApiClientError, AkuvoxApiClientCommunicationError) as err:
+                LOGGER.debug("Door log poll failed: %s", err)
+                json_data = None
             if json_data is not None:
+                self._rate_limited = False
                 new_door_log = await self._data.async_parse_personal_door_log(json_data)
                 if new_door_log is not None:
                     # Fire HA event
@@ -745,6 +758,7 @@ class AkuvoxApiClient:
         url: str,
         data,
         headers: dict | None = None,
+        retry_other_app_type: bool = True,
     ):
         """Get information from the API."""
         try:
@@ -758,6 +772,8 @@ class AkuvoxApiClient:
                 return self.process_response(response, url)
 
         except asyncio.TimeoutError as exception:
+            if not retry_other_app_type:
+                raise AkuvoxApiClientCommunicationError(f"Timeout (not retried): {exception}") from exception
             # Fix for accounts which use the "single" endpoint instead of "community"
             app_type_1 = "community"
             app_type_2 = "single"
@@ -791,12 +807,18 @@ class AkuvoxApiClient:
 
     def process_response(self, response, url):
         """Process response and return dict with data."""
+        if response.status_code == 429:
+            if url.endswith(API_GET_PERSONAL_DOOR_LOG) and not getattr(self, "_rate_limited", False):
+                LOGGER.debug("SmartPlus rate limit (HTTP 429) on %s; backing off", url)
+            if url.endswith(API_GET_PERSONAL_DOOR_LOG):
+                self._rate_limited = True
+            self._last_api_error = {"http_status": 429}
+            return None
         if response.status_code == 200:
             # Assuming the response is valid JSON, parse it
             try:
                 json_data = response.json()
 
-                self._rate_limited = False
                 # Standard requests
                 if "result" in json_data:
                     if json_data["result"] == 0:
@@ -828,17 +850,18 @@ class AkuvoxApiClient:
                     return None
 
                 if "too frequently" in str(json_data.get("error_msg", "")).lower():
-                    if not getattr(self, "_rate_limited", False):
-                        LOGGER.warning("SmartPlus rate limit on %s; backing off", url)
-                    self._rate_limited = True
+                    if url.endswith(API_GET_PERSONAL_DOOR_LOG):
+                        self._rate_limited = True
+                    self._last_api_error = json_data
                     return None
                 LOGGER.warning("🤨 Response: %s", str(json_data))
-                self._last_api_error = None
+                self._last_api_error = json_data
             except Exception as error:
                 LOGGER.error("❌ Error occurred when parsing JSON: %s\nRequest: %s",
                              error,
                              url)
         else:
+            self._last_api_error = {"http_status": response.status_code}
             LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
                          response.status_code,
                          url)
