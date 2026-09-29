@@ -152,6 +152,12 @@ CREATE_TEMP_KEY_SCHEMA = vol.Schema({
 DELETE_TEMP_KEY_SCHEMA = vol.Schema({vol.Required("key_id"): cv.string})
 
 
+async def _async_store_fresh_keys(client: AkuvoxApiClient) -> None:
+    """Fetch the key list again and save it: the sensor platform builds its entities from storage."""
+    await client.async_retrieve_temp_keys_data()
+    await client._data.async_set_stored_data_for_key("door_keys_data", client._data.door_keys_data)
+
+
 def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if hass.services.has_service(DOMAIN, SERVICE_CREATE_TEMP_KEY):
         return
@@ -172,10 +178,10 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
                                             start, end, call.data["allowed_times"])
         if not ok:
             raise HomeAssistantError(f"SmartPlus rejected the key: {client._last_api_error}")
+        await _async_store_fresh_keys(client)
+        keys = [k for k in client._data.door_keys_data if k.get("description") == call.data["description"]]
+        keys.sort(key=lambda k: int(k.get("key_id") or 0))
         await hass.config_entries.async_reload(entry.entry_id)
-        new_client: AkuvoxApiClient = get_api_client(hass)  # type: ignore
-        keys = [k for k in new_client._data.door_keys_data if k.get("description") == call.data["description"]]
-        keys.sort(key=lambda k: str(k.get("begin_time", "")))
         if not keys:
             return {"created": True}
         k = keys[-1]
@@ -186,6 +192,7 @@ def _async_register_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
         client: AkuvoxApiClient = get_api_client(hass)  # type: ignore
         if not await client.async_delete_temp_key(call.data["key_id"]):
             raise HomeAssistantError(f"SmartPlus rejected deleting the key: {client._last_api_error}")
+        await _async_store_fresh_keys(client)
         await hass.config_entries.async_reload(entry.entry_id)
 
     hass.services.async_register(DOMAIN, SERVICE_CREATE_TEMP_KEY, _create, schema=CREATE_TEMP_KEY_SCHEMA,
