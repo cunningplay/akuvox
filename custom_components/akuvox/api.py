@@ -732,7 +732,7 @@ class AkuvoxApiClient:
         if json_data is not None and len(json_data) > 0:
             return json_data
 
-        LOGGER.error("❌ Unable to retrieve user's personal door log")
+        LOGGER.debug("Unable to retrieve the personal door log (rate limit, or no access for this account)")
         return None
 
     ###################
