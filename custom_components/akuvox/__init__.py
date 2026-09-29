@@ -50,6 +50,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _async_register_services(hass, entry)
+    # Door-log events (akuvox_door_update: calls, unlocks) poll from setup, not only after a reload.
+    await coordinator.client.async_start_polling_personal_door_log()
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
@@ -64,12 +66,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry."""
-    await async_stop_polling(hass)
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
-    await async_update_configuration(hass, entry)
-    await async_start_polling(hass)
+    """Reload config entry (options changed): the standard reload; setup restarts polling."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 # Polling
 
