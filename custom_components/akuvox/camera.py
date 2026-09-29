@@ -93,3 +93,13 @@ class AkuvoxCameraEntity(GenericCamera):
             manufacturer=NAME,
         )
 
+
+    async def _async_get_supported_webrtc_provider(self, fn):
+        """Offer no WebRTC provider, so the frontend streams these cameras over HLS only.
+
+        SmartPlus cloud relays serve RTSP over UDP only (the stream options above). HA's
+        HLS stream honors that, but go2rtc pulls RTSP over TCP, the relay answers with a
+        UDP transport, go2rtc rejects it ("wrong transport") and WebRTC fails; remote
+        clients (Companion app off the LAN) then show "Failed to start WebRTC stream".
+        """
+        return None
