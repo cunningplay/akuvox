@@ -1,74 +1,112 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Akuvox SmartPlus Sign-In",
-                "description": "Choose a sign-in method to connect to your Akuvox SmartPlus account:",
-                "data": {
-                    "sign_in_method": "Sign-In Method"
-                }
-            },
-            "sms_sign_in_warning": {
-                "title": "SMS Verification",
-                "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Tokens` sign-in method instead."
-            },
-            "sms_sign_in": {
-                "title": "SMS Verification",
-                "description": "Please enter your mobile phone number to receive your verification SMS:",
-                "data": {
-                    "country_code": "Country",
-                    "phone_number": "Phone Number (without the country code)",
-                    "subdomain": "Manually set the regional API subdomain"
-                }
-            },
-            "app_tokens_sign_in": {
-                "title": "Sign In via App Tokens",
-                "description": "Please enter your account details below.\n\nℹ️ To obtain your tokens please review the documentation.",
-                "data": {
-                    "country_code": "Country",
-                    "phone_number": "Phone Number (without the country code)",
-                    "token": "Token",
-                    "auth_token": "Auth Token",
-                    "refresh_token": "Refresh Token (optional)",
-                    "subdomain": "Manually set the regional API subdomain"
-                }
-            },
-            "family_member_sign_in": {
-                "title": "Family Member (Username & Password)",
-                "description": "Sign in with your SmartPlus family-member account username and password.",
-                "data": {
-                    "username": "Username",
-                    "password": "Password",
-                    "subdomain": "Regional API subdomain"
-                }
-            },
-            "verify_sms_code": {
-                "title": "SMS Code Verification",
-                "description": "Please enter the SMS code you received.",
-                "data": {
-                    "sms_code": "SMS Code"
-                },
-                "data_description": {
-                    "sms_code": "It may take up to 60 seconds to receive the SMS."
-                }
-            }
+  "config": {
+    "step": {
+      "user": {
+        "title": "Akuvox SmartPlus Sign-In",
+        "description": "Choose a sign-in method to connect to your Akuvox SmartPlus account:",
+        "data": {
+          "sign_in_method": "Sign-In Method"
         }
-    },
-    "options": {
-        "step": {
-            "init": {
-                "title": "SmartPlus User Tokens & Event Configuration",
-                "description": "If you signed into the SmartPlus app on your device after adding the integration, you can update your user tokens below. This will allow Home Assistant to communicate with Akuvox's servers while you remain signed in on your device.\n\nPlease refer to the documentation for instructions on how to extract your token string.",
-                "data": {
-                    "country": "The country registered in your Akuvox SmartPlus account",
-                    "override": "Use the following SmartLife account tokens:",
-                    "auth_token": "Your SmartLife `auth_token` value",
-                    "token": "Your SmartLife `token` value",
-                    "refresh_token": "Your SmartLife `refresh_token` value",
-                    "subdomain": "Manually set the regional API subdomain",
-                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
-                }
-            }
+      },
+      "sms_sign_in_warning": {
+        "title": "SMS Verification",
+        "description": "⚠️ Warning ⚠️\n\nChoosing this sign-in method will log you out of the SmartPlus app on your phone.\n\nTo stay logged in to the app and use both the app and this integration, please use the `App Tokens` sign-in method instead."
+      },
+      "sms_sign_in": {
+        "title": "SMS Verification",
+        "description": "Please enter your mobile phone number to receive your verification SMS:",
+        "data": {
+          "country_code": "Country",
+          "phone_number": "Phone Number (without the country code)",
+          "subdomain": "Manually set the regional API subdomain"
         }
+      },
+      "app_tokens_sign_in": {
+        "title": "Sign In via App Tokens",
+        "description": "Please enter your account details below.\n\nℹ️ To obtain your tokens please review the documentation.",
+        "data": {
+          "country_code": "Country",
+          "phone_number": "Phone Number (without the country code)",
+          "token": "Token",
+          "auth_token": "Auth Token",
+          "refresh_token": "Refresh Token (optional)",
+          "subdomain": "Manually set the regional API subdomain"
+        }
+      },
+      "family_member_sign_in": {
+        "title": "Family Member (Username & Password)",
+        "description": "Sign in with your SmartPlus family-member account username and password.",
+        "data": {
+          "username": "Username",
+          "password": "Password",
+          "subdomain": "Regional API subdomain"
+        }
+      },
+      "verify_sms_code": {
+        "title": "SMS Code Verification",
+        "description": "Please enter the SMS code you received.",
+        "data": {
+          "sms_code": "SMS Code"
+        },
+        "data_description": {
+          "sms_code": "It may take up to 60 seconds to receive the SMS."
+        }
+      }
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SmartPlus User Tokens & Event Configuration",
+        "description": "If you signed into the SmartPlus app on your device after adding the integration, you can update your user tokens below. This will allow Home Assistant to communicate with Akuvox's servers while you remain signed in on your device.\n\nPlease refer to the documentation for instructions on how to extract your token string.",
+        "data": {
+          "country": "The country registered in your Akuvox SmartPlus account",
+          "override": "Use the following SmartLife account tokens:",
+          "auth_token": "Your SmartLife `auth_token` value",
+          "token": "Your SmartLife `token` value",
+          "refresh_token": "Your SmartLife `refresh_token` value",
+          "subdomain": "Manually set the regional API subdomain",
+          "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
+        }
+      }
+    }
+  },
+  "services": {
+    "create_temp_key": {
+      "name": "Create temporary key",
+      "description": "Create a one-time SmartPlus temporary key (PIN and QR) for the chosen doors.",
+      "fields": {
+        "description": {
+          "name": "Name",
+          "description": "Shown in SmartPlus, e.g. Delivery or Visit."
+        },
+        "valid_until": {
+          "name": "Valid until",
+          "description": "When the key stops working."
+        },
+        "valid_from": {
+          "name": "Valid from",
+          "description": "When the key starts working (default: now)."
+        },
+        "allowed_times": {
+          "name": "Uses",
+          "description": "How many times each door accepts the key."
+        },
+        "doors": {
+          "name": "Doors",
+          "description": "Door station names; all doors when empty."
+        }
+      }
+    },
+    "delete_temp_key": {
+      "name": "Delete temporary key",
+      "description": "Delete a SmartPlus temporary key.",
+      "fields": {
+        "key_id": {
+          "name": "Key ID",
+          "description": "The key_id attribute of the temporary-key sensor."
+        }
+      }
+    }
+  }
 }

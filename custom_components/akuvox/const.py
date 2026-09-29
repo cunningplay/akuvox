@@ -472,6 +472,8 @@ API_REFRESH_TOKEN = "refresh_token"
 
 API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
+API_ADD_PERSONAL_TEMP_KEY = "tempKey/addPersonalTempKey"
+API_DEL_PERSONAL_TEMP_KEY = "tempKey/delPersonalTempKey"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"

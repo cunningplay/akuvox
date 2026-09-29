@@ -33,6 +33,8 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
+    API_ADD_PERSONAL_TEMP_KEY,
+    API_DEL_PERSONAL_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
     API_REFRESH_TOKEN,
     LAST_TOKEN_REFRESH_KEY,
@@ -575,6 +577,66 @@ class AkuvoxApiClient:
 
         LOGGER.error("❌ Unable to retrieve user's temporary key list.")
         return None
+
+    def _temp_key_headers(self) -> dict:
+        """Headers the SmartPlus temp-key web view sends (TmpKey.html / AddTempKey.html)."""
+        subdomain = self._data.subdomain
+        return {
+            "x-cloud-version": "6.4",
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/x-www-form-urlencoded",
+            "x-cloud-lang": "en",
+            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
+            "referer": f"https://{subdomain}.akuvox.com/smartplus/AddTempKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
+            "x-auth-token": self._data.token,
+        }
+
+    async def async_add_temp_key(self, description: str, relays: list[tuple[str, str]],
+                                 start, end, allowed_times: int) -> bool:
+        """Create a one-time ("never repeat") temporary key for the given (MAC, relay) doors.
+
+        Mirrors the SmartPlus web view's submit(): v3 endpoints take form fields, nested values
+        flattened as MAC[i][MAC] / MAC[i][Relay] (0-based relays joined with ';').
+        """
+        by_mac: dict[str, list[str]] = {}
+        for mac, relay in relays:
+            by_mac.setdefault(mac, []).append(str(relay))
+        data = {
+            "Description": description,
+            "IDNumber": "",
+            "SchedulerType": "3",
+            "DateFlag": "",
+            "StartDay": start.strftime("%Y-%m-%d"),
+            "StopDay": end.strftime("%Y-%m-%d"),
+            "StartTime": start.strftime("%H:%M:%S"),
+            "StopTime": end.strftime("%H:%M:%S"),
+            "AllowedTimes": str(int(allowed_times)),
+        }
+        for i, (mac, rel) in enumerate(by_mac.items()):
+            data[f"MAC[{i}][MAC]"] = mac
+            data[f"MAC[{i}][Relay]"] = ";".join(sorted(set(rel)))
+            data[f"MAC[{i}][SecurityRelay]"] = ""
+        if self._data.app_type != "single":
+            data["IsFollowMyAccess"] = "1"
+        url = f"https://{self.get_activities_host()}/{API_ADD_PERSONAL_TEMP_KEY}"
+        self._last_api_error = None
+        await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data)
+        if self._last_api_error:
+            LOGGER.error("❌ SmartPlus rejected the new temporary key: %s", self._last_api_error)
+            return False
+        LOGGER.debug("✅ Temporary key '%s' created", description)
+        return True
+
+    async def async_delete_temp_key(self, key_id: str) -> bool:
+        """Delete a temporary key by its ID (the key_id attribute of its sensor)."""
+        url = f"https://{self.get_activities_host()}/{API_DEL_PERSONAL_TEMP_KEY}"
+        self._last_api_error = None
+        await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data={"ID": str(key_id)})
+        if self._last_api_error:
+            LOGGER.error("❌ SmartPlus rejected deleting temporary key %s: %s", key_id, self._last_api_error)
+            return False
+        LOGGER.debug("✅ Temporary key %s deleted", key_id)
+        return True
 
     async def async_start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""

@@ -1,0 +1,22 @@
+create_temp_key:
+  fields:
+    description:
+      required: true
+      example: "Delivery"
+      selector: {text: {}}
+    valid_until:
+      required: true
+      selector: {datetime: {}}
+    valid_from:
+      selector: {datetime: {}}
+    allowed_times:
+      default: 1
+      selector: {number: {min: 1, max: 100, mode: box}}
+    doors:
+      example: "ENTRADA MAR DE BARENTS"
+      selector: {text: {multiple: true}}
+delete_temp_key:
+  fields:
+    key_id:
+      required: true
+      selector: {text: {}}
