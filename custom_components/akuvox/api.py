@@ -579,17 +579,36 @@ class AkuvoxApiClient:
         return None
 
     def _temp_key_headers(self) -> dict:
-        """Headers the SmartPlus temp-key web view sends (TmpKey.html / AddTempKey.html)."""
-        subdomain = self._data.subdomain
+        """Headers for temp-key writes (the set verified against ucloud on 2026-09-29)."""
         return {
             "x-cloud-version": "6.4",
+            "x-cloud-lang": "en",
             "accept": "application/json, text/plain, */*",
             "content-type": "application/x-www-form-urlencoded",
-            "x-cloud-lang": "en",
-            "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SmartPlus/6.2",
-            "referer": f"https://{subdomain}.akuvox.com/smartplus/AddTempKey.html?TOKEN={self._data.token}&USERTYPE=20&VERSION=6.6",
             "x-auth-token": self._data.token,
         }
+
+    async def _async_temp_key_post(self, path: str, data: dict) -> bool:
+        """POST a temp-key form with the current stored token; on an identity error refresh once and retry.
+
+        The in-memory token can lag the stored one (refreshes rotate it), and SmartPlus answers
+        "Invalid identity information! Please login again." (code 2) to a stale token.
+        """
+        for attempt in (1, 2):
+            stored = await self._data.async_get_stored_data_for_key("token")
+            if stored:
+                self._data.token = stored
+            url = f"https://{self.get_activities_host()}/{path}"
+            self._last_api_error = None
+            await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data)
+            if not self._last_api_error:
+                return True
+            if attempt == 1 and self.has_token_error():
+                LOGGER.warning("🔁 SmartPlus rejected the token for %s; refreshing and retrying once", path)
+                await self.async_refresh_token(reason="temp key request")
+                continue
+            return False
+        return False
 
     async def async_add_temp_key(self, description: str, relays: list[tuple[str, str]],
                                  start, end, allowed_times: int) -> bool:
@@ -600,7 +619,7 @@ class AkuvoxApiClient:
         """
         by_mac: dict[str, list[str]] = {}
         for mac, relay in relays:
-            by_mac.setdefault(mac, []).append(str(relay))
+            by_mac.setdefault(str(mac).replace(":", "").upper(), []).append(str(relay))
         data = {
             "Description": description,
             "IDNumber": "",
@@ -618,10 +637,7 @@ class AkuvoxApiClient:
             data[f"MAC[{i}][SecurityRelay]"] = ""
         if self._data.app_type != "single":
             data["IsFollowMyAccess"] = "1"
-        url = f"https://{self.get_activities_host()}/{API_ADD_PERSONAL_TEMP_KEY}"
-        self._last_api_error = None
-        await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data)
-        if self._last_api_error:
+        if not await self._async_temp_key_post(API_ADD_PERSONAL_TEMP_KEY, data):
             LOGGER.error("❌ SmartPlus rejected the new temporary key: %s", self._last_api_error)
             return False
         LOGGER.debug("✅ Temporary key '%s' created", description)
@@ -629,10 +645,7 @@ class AkuvoxApiClient:
 
     async def async_delete_temp_key(self, key_id: str) -> bool:
         """Delete a temporary key by its ID (the key_id attribute of its sensor)."""
-        url = f"https://{self.get_activities_host()}/{API_DEL_PERSONAL_TEMP_KEY}"
-        self._last_api_error = None
-        await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data={"ID": str(key_id)})
-        if self._last_api_error:
+        if not await self._async_temp_key_post(API_DEL_PERSONAL_TEMP_KEY, {"ID": str(key_id)}):
             LOGGER.error("❌ SmartPlus rejected deleting temporary key %s: %s", key_id, self._last_api_error)
             return False
         LOGGER.debug("✅ Temporary key %s deleted", key_id)
