@@ -678,7 +678,9 @@ class AkuvoxApiClient:
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
                     self.hass.bus.async_fire(event_name, new_door_log)
-            await asyncio.sleep(2)  # Wait for 2 seconds before calling again
+            # SmartPlus answers {"error_msg": "Requesting too frequently"} to a 2 s poll; poll every 5 s and
+            # back off 30 s after a rate-limit answer (process_response logs it as an unknown response).
+            await asyncio.sleep(30 if getattr(self, "_rate_limited", False) else 5)
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
@@ -794,6 +796,7 @@ class AkuvoxApiClient:
             try:
                 json_data = response.json()
 
+                self._rate_limited = False
                 # Standard requests
                 if "result" in json_data:
                     if json_data["result"] == 0:
@@ -824,6 +827,11 @@ class AkuvoxApiClient:
                     LOGGER.warning("Akuvox refresh API rejected %s: %s", url, json_data)
                     return None
 
+                if "too frequently" in str(json_data.get("error_msg", "")).lower():
+                    if not getattr(self, "_rate_limited", False):
+                        LOGGER.warning("SmartPlus rate limit on %s; backing off", url)
+                    self._rate_limited = True
+                    return None
                 LOGGER.warning("🤨 Response: %s", str(json_data))
                 self._last_api_error = None
             except Exception as error:
