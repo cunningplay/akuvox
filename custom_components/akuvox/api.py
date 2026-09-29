@@ -678,9 +678,9 @@ class AkuvoxApiClient:
                     LOGGER.debug("🚪 New door open event occurred. Firing akuvox_door_update event")
                     event_name = "akuvox_door_update"
                     self.hass.bus.async_fire(event_name, new_door_log)
-            # SmartPlus answers {"error_msg": "Requesting too frequently"} to a 2 s poll; poll every 5 s and
-            # back off 30 s after a rate-limit answer (process_response logs it as an unknown response).
-            await asyncio.sleep(30 if getattr(self, "_rate_limited", False) else 5)
+            # SmartPlus answers {"error_msg": "Requesting too frequently"} (HTTP 429) to 2 s and 5 s polls; poll every 12 s and
+            # back off 60 s after a rate-limit answer (process_response logs it as an unknown response).
+            await asyncio.sleep(60 if getattr(self, "_rate_limited", False) else 12)
 
     async def async_get_personal_door_log(self):
         """Request the user's personal door log data."""
