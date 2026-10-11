@@ -255,6 +255,8 @@ Via the integration's `CONFIGURE` button you can adjust the following:
    - Wait for camera screenshots to become available before triggering the event.
    - Receive the event as soon as it is generated, without waiting for camera screenshots.
 
+1. Set the door log polling interval (`akuvox_door_update` events), in seconds: default 12. SmartPlus rate-limits polls faster than about 10 seconds; when it does, polling backs off to 5x the interval (at least 60 s) until an answer comes through. Raise it if the door log is only a fallback for you (for example when calls already reach Home Assistant over SIP).
+
 ## Finding your SmartPlus Account Tokens
 
 To obtain your SmartPlus account tokens you can use an HTTP proxy (such as [mitmproxy](https://mitmproxy.org/))
