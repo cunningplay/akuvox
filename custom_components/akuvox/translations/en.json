@@ -70,5 +70,43 @@
                 }
             }
         }
+    },
+    "services": {
+        "create_temp_key": {
+            "name": "Create temporary key",
+            "description": "Create a one-time SmartPlus temporary key (PIN and QR) for the chosen doors.",
+            "fields": {
+                "description": {
+                    "name": "Name",
+                    "description": "Shown in SmartPlus, e.g. Delivery or Visit."
+                },
+                "valid_until": {
+                    "name": "Valid until",
+                    "description": "When the key stops working."
+                },
+                "valid_from": {
+                    "name": "Valid from",
+                    "description": "When the key starts working (default: now)."
+                },
+                "allowed_times": {
+                    "name": "Uses",
+                    "description": "How many times each door accepts the key."
+                },
+                "doors": {
+                    "name": "Doors",
+                    "description": "Door station names; all doors when empty."
+                }
+            }
+        },
+        "delete_temp_key": {
+            "name": "Delete temporary key",
+            "description": "Delete a SmartPlus temporary key.",
+            "fields": {
+                "key_id": {
+                    "name": "Key ID",
+                    "description": "The key_id attribute of the temporary-key sensor."
+                }
+            }
+        }
     }
 }

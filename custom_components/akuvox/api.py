@@ -33,6 +33,8 @@ from .const import (
     API_OPENDOOR,
     API_APP_HOST,
     API_GET_PERSONAL_TEMP_KEY_LIST,
+    API_ADD_PERSONAL_TEMP_KEY,
+    API_DEL_PERSONAL_TEMP_KEY,
     API_GET_PERSONAL_DOOR_LOG,
     API_REFRESH_TOKEN,
     LAST_TOKEN_REFRESH_KEY,
@@ -540,9 +542,10 @@ class AkuvoxApiClient:
         return None
 
     async def async_retrieve_temp_keys_data(self) -> bool:
-        """Request and parse the user's temporary keys."""
+        """Request and parse the user's temporary keys (keeps the old list when the request fails)."""
+        self._last_api_error = None
         json_data = await self.async_get_temp_key_list()
-        if json_data is not None:
+        if json_data is not None and not self._last_api_error:
             self._data.parse_temp_keys_data(json_data)
             return True
         return False
@@ -575,6 +578,86 @@ class AkuvoxApiClient:
 
         LOGGER.error("❌ Unable to retrieve user's temporary key list.")
         return None
+
+    def _temp_key_headers(self) -> dict:
+        """Headers for temp-key writes (the set verified against ucloud on 2026-09-29)."""
+        return {
+            "x-cloud-version": "6.4",
+            "x-cloud-lang": "en",
+            "accept": "application/json, text/plain, */*",
+            "content-type": "application/x-www-form-urlencoded",
+            "x-auth-token": self._data.token,
+        }
+
+    async def _async_temp_key_post(self, path: str, data: dict) -> bool:
+        """POST a temp-key form with the current stored token; on an identity error refresh once and retry.
+
+        The in-memory token can lag the stored one (refreshes rotate it), and SmartPlus answers
+        "Invalid identity information! Please login again." (code 2) to a stale token.
+        """
+        for attempt in (1, 2):
+            stored = await self._data.async_get_stored_data_for_key("token")
+            if stored:
+                self._data.token = stored
+            url = f"https://{self.get_activities_host()}/{path}"
+            self._last_api_error = None
+            try:
+                result = await self._async_api_wrapper(method="post", url=url, headers=self._temp_key_headers(), data=data,
+                                                       retry_other_app_type=False)
+            except (AkuvoxApiClientError, AkuvoxApiClientCommunicationError) as err:
+                # A timed-out POST may still have reached SmartPlus: never resend it automatically.
+                self._last_api_error = {"exception": str(err)}
+                return False
+            # Success only on an explicit {"code": 0}: HTTP errors, rate limits and unknown bodies are failures.
+            if result is not None and not self._last_api_error:
+                return True
+            if attempt == 1 and self.has_token_error():
+                LOGGER.warning("🔁 SmartPlus rejected the token for %s; refreshing and retrying once", path)
+                await self.async_refresh_token(reason="temp key request")
+                continue
+            return False
+        return False
+
+    async def async_add_temp_key(self, description: str, relays: list[tuple[str, str]],
+                                 start, end, allowed_times: int) -> bool:
+        """Create a one-time ("never repeat") temporary key for the given (MAC, relay) doors.
+
+        Mirrors the SmartPlus web view's submit(): v3 endpoints take form fields, nested values
+        flattened as MAC[i][MAC] / MAC[i][Relay] (0-based relays joined with ';').
+        """
+        by_mac: dict[str, list[str]] = {}
+        for mac, relay in relays:
+            by_mac.setdefault(str(mac).replace(":", "").upper(), []).append(str(relay))
+        data = {
+            "Description": description,
+            "IDNumber": "",
+            "SchedulerType": "3",
+            "DateFlag": "",
+            "StartDay": start.strftime("%Y-%m-%d"),
+            "StopDay": end.strftime("%Y-%m-%d"),
+            "StartTime": start.strftime("%H:%M:%S"),
+            "StopTime": end.strftime("%H:%M:%S"),
+            "AllowedTimes": str(int(allowed_times)),
+        }
+        for i, (mac, rel) in enumerate(by_mac.items()):
+            data[f"MAC[{i}][MAC]"] = mac
+            data[f"MAC[{i}][Relay]"] = ";".join(sorted(set(rel)))
+            data[f"MAC[{i}][SecurityRelay]"] = ""
+        if self._data.app_type != "single":
+            data["IsFollowMyAccess"] = "1"
+        if not await self._async_temp_key_post(API_ADD_PERSONAL_TEMP_KEY, data):
+            LOGGER.error("❌ SmartPlus rejected the new temporary key: %s", self._last_api_error)
+            return False
+        LOGGER.debug("✅ Temporary key '%s' created", description)
+        return True
+
+    async def async_delete_temp_key(self, key_id: str) -> bool:
+        """Delete a temporary key by its ID (the key_id attribute of its sensor)."""
+        if not await self._async_temp_key_post(API_DEL_PERSONAL_TEMP_KEY, {"ID": str(key_id)}):
+            LOGGER.error("❌ SmartPlus rejected deleting temporary key %s: %s", key_id, self._last_api_error)
+            return False
+        LOGGER.debug("✅ Temporary key %s deleted", key_id)
+        return True
 
     async def async_start_polling_personal_door_log(self):
         """Poll the server contineously for the latest personal door log."""
@@ -658,6 +741,7 @@ class AkuvoxApiClient:
         url: str,
         data,
         headers: dict | None = None,
+        retry_other_app_type: bool = True,
     ):
         """Get information from the API."""
         try:
@@ -671,6 +755,8 @@ class AkuvoxApiClient:
                 return self.process_response(response, url)
 
         except asyncio.TimeoutError as exception:
+            if not retry_other_app_type:
+                raise AkuvoxApiClientCommunicationError(f"Timeout (not retried): {exception}") from exception
             # Fix for accounts which use the "single" endpoint instead of "community"
             app_type_1 = "community"
             app_type_2 = "single"
@@ -740,12 +826,14 @@ class AkuvoxApiClient:
                     return None
 
                 LOGGER.warning("🤨 Response: %s", str(json_data))
-                self._last_api_error = None
+                # Keep the body: callers that write (temp keys) succeed only on an explicit {"code": 0}.
+                self._last_api_error = json_data
             except Exception as error:
                 LOGGER.error("❌ Error occurred when parsing JSON: %s\nRequest: %s",
                              error,
                              url)
         else:
+            self._last_api_error = {"http_status": response.status_code}
             LOGGER.debug("❌ Error: HTTP status code = %s for request to %s",
                          response.status_code,
                          url)

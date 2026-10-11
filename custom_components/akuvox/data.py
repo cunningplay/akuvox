@@ -183,7 +183,9 @@ class AkuvoxData:
             door_keys_data["access_times"] = door_keys_json["AccessTimes"]
             door_keys_data["allowed_times"] = door_keys_json["AllowedTimes"]
             door_keys_data["each_allowed_times"] = door_keys_json["EachAllowedTimes"]
-            door_keys_data["qr_code_url"] = f"https://{TEMP_KEY_QR_HOST}{door_keys_json['QrCodeUrl']}"
+            # TEMP_KEY_QR_HOST is "subdomain.akuvox.com"; the image lives on the account's regional host.
+            qr_host = TEMP_KEY_QR_HOST.replace("subdomain", self.subdomain or "ecloud")
+            door_keys_data["qr_code_url"] = f"https://{qr_host}{door_keys_json['QrCodeUrl']}"
             door_keys_data["expired"] = False if door_keys_json["Expired"] else True
 
             door_keys_data["doors"] = []
