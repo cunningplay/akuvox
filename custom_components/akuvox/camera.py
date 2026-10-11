@@ -1,5 +1,7 @@
 """Camera platform for akuvox."""
 
+import sys
+
 from collections.abc import Callable, Awaitable
 
 from homeassistant.helpers import storage
@@ -93,3 +95,22 @@ class AkuvoxCameraEntity(GenericCamera):
             manufacturer=NAME,
         )
 
+
+    async def stream_source(self) -> str | None:
+        """Return the RTSP URL; hand go2rtc the ffmpeg form, like HA does for generic cameras.
+
+        SmartPlus cloud relays serve RTSP over UDP only. go2rtc's native RTSP client is TCP-only and
+        fails ("wrong transport"); its ffmpeg source with the "rtsp/udp" input pulls over UDP. So when
+        go2rtc is the caller, return "ffmpeg:<url>#input=rtsp/udp" (HA's own HLS stream keeps the plain
+        URL, as a fallback).
+        """
+        src = await super().stream_source()
+        frame = sys._getframe(1)
+        for _ in range(4):
+            if frame is None:
+                break
+            if str(frame.f_globals.get("__name__", "")).startswith("homeassistant.components.go2rtc"):
+                # go2rtc's "rtsp" ffmpeg input forces TCP ("Nonmatching transport"); "rtsp/udp" forces UDP.
+                return f"ffmpeg:{src}#input=rtsp/udp" if src and not src.startswith("ffmpeg:") else src
+            frame = frame.f_back
+        return src
