@@ -7,7 +7,7 @@
 
 <img src="https://user-images.githubusercontent.com/1849295/269948645-08c99fe2-253e-49cc-b38b-2a2937c2726d.png" width="100">
 
-Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integration you can access you door camera feeds, trigger door relays to open doors, be notified when doors are opened, and view your temporary keys _(support for adding temporary keys comming soon)_.
+Integrate your Akuvox SmartPlus mobile app with Home Assistant. With this integration you can access you door camera feeds, trigger door relays to open doors, be notified when doors are opened, and view, create and delete temporary keys.
 
 **Disclaimer:** This integration is not affiliated with or endorsed by Akuvox. It is a community-contributed project and is provided as-is without any warranty or guarantee. Use it at your own discretion and responsibility.
 
@@ -55,7 +55,20 @@ You door camera feeds are accessible as camera entities in Home Assistant.
 Your door's relays are added as buttons in Home Assistant which allow you to trigger your doors to open remotely.
 
 ### Temporary Keys
-You can view your temporary access keys from the SmartPlus app in Home Assistant.
+You can view your temporary access keys from the SmartPlus app in Home Assistant, and create or delete them with two actions:
+
+- `akuvox.create_temp_key`: creates a one-time ("never repeat") key. Fields: `description`, `valid_until`, optional `valid_from` (default now), `allowed_times` (default 1) and `doors` (door station names as shown in SmartPlus; all doors when omitted). It returns the new key's `key_id`, `key_code`, `qr_code_url` and `end_time`.
+- `akuvox.delete_temp_key`: deletes a key by `key_id` (the `key_id` attribute of its sensor).
+
+```yaml
+action: akuvox.create_temp_key
+data:
+  description: Delivery
+  valid_until: "2026-10-12 18:00:00"
+  allowed_times: 1
+  doors: ["FRONT GATE"]
+response_variable: key
+```
 
 ### Door Bell & Door Open Events
 Whenever any of your doors are rung or opened, the `akuvox_door_update` event is fired in Home Assistant. When you use the `akuvox_door_update` even as an automation trigger, you will have access to data associated with the specific door ring/open event, accessible under: `trigger.event.data`.
