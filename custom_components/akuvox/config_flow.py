@@ -11,6 +11,8 @@ from .coordinator import AkuvoxDataUpdateCoordinator
 
 from .const import (
     DOMAIN,
+    CONF_DOOR_LOG_POLL_INTERVAL,
+    DEFAULT_DOOR_LOG_POLL_INTERVAL,
     DEFAULT_TOKEN,
     DEFAULT_APP_TOKEN,
     DEFAULT_REFRESH_TOKEN,
@@ -609,6 +611,9 @@ class AkuvoxOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required("event_screenshot_options",
                          default=self.get_data_key_value("event_screenshot_options", "asap") # type: ignore
             ): vol.In(event_screenshot_options),
+            vol.Optional(CONF_DOOR_LOG_POLL_INTERVAL,
+                         default=config_options.get(CONF_DOOR_LOG_POLL_INTERVAL, DEFAULT_DOOR_LOG_POLL_INTERVAL)
+            ): vol.All(vol.Coerce(int), vol.Range(min=5, max=3600)),
         })
 
         # Show the form with the current options

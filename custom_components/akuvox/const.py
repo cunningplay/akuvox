@@ -474,6 +474,12 @@ API_APP_HOST = "subdomain.akuvox.com/web-server/v3/app/"
 API_GET_PERSONAL_TEMP_KEY_LIST = "tempKey/getPersonalTempKeyList?row=20&page=1"
 API_GET_PERSONAL_DOOR_LOG = "log/getDoorLog?row=1"
 
+# Door-log polling (akuvox_door_update). SmartPlus rate-limits the endpoint (HTTP 429 /
+# "Requesting too frequently") below roughly 10 s, so the default stays above that; after a
+# rate-limit answer polling backs off to 5x the interval (at least 60 s).
+CONF_DOOR_LOG_POLL_INTERVAL = "door_log_poll_interval"
+DEFAULT_DOOR_LOG_POLL_INTERVAL = 12
+
 TEMP_KEY_QR_HOST = "subdomain.akuvox.com"
 
 DATA_STORAGE_KEY = "akuvox_data_storage_key"

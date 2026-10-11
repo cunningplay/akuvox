@@ -66,7 +66,8 @@
                     "token": "Your SmartLife `token` value",
                     "refresh_token": "Your SmartLife `refresh_token` value",
                     "subdomain": "Manually set the regional API subdomain",
-                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:"
+                    "event_screenshot_options": "Screenshot URLS for `akuvox_door_update` events:",
+                    "door_log_poll_interval": "Door log polling interval in seconds (akuvox_door_update events; SmartPlus rate-limits polls faster than about 10 s)"
                 }
             }
         }
